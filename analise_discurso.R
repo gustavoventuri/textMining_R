@@ -1,9 +1,26 @@
-#install.packages("installr")
-#library(installr)
-#updateR()
+## AUTHOR: GUSTAVO VENTURI
+## CLASS: TEXT ANALISYS WITH R AND PYTHON
+## PROF: JASMINE MOREIRA
+## DATE: 11 DECEMBER 2019
+## CURRENT R VERSION: 3.6.1
 
-# install.packages("pdftools")
-# install.packages("tibble")
+#---------------------------#
+#        UPDATING R         #
+#---------------------------#
+
+#version                       #Check current version. If current version is older than 3.6.1, install a newer version.
+#install.packages("installr")  #Install package to install packages
+#library(installr)             #Call the library "installr"
+#updateR()                     #function to update R
+
+
+#---------------------------#
+#   INSTALLING PACKAGES     #
+#---------------------------#
+
+
+# install.packages("pdftools")        
+# install.packages("tibble")          
 # install.packages("tm")
 # install.packages("dplyr")
 # install.packages("tidytext")
@@ -19,6 +36,14 @@
 # install.packages("Rfacebook")
 # install.packages("topicmodels")
 # install.packages("ldatuning")
+#install.packages("rtweet")
+#install.packages("stringr")
+
+
+#---------------------------#
+#    LOADING LIBRARIES      #
+#---------------------------#
+
 
 library(pdftools)
 library(tibble)
@@ -37,12 +62,23 @@ library(ggraph)
 library(widyr)
 library(topicmodels)
 library(ldatuning)
+library(rtweet)
+library(stringr)
 
-##CARREGA A LISTA DE PALAVRAS QUE DEVEM SAIR DO TEXTO
+
+#---------------------------#
+#     LOADING STOPWORDS     #
+#---------------------------#
+
+
+##LOAD A STOPWORDS IN PT-BR
+
 stp_words <- 
 read_delim("C:\\Users\\gusta\\OneDrive\\Documentos\\RStudio\\UP_Pos_RScript\\stopwords.csv",
            ";",escape_double = FALSE, trim_ws = TRUE, locale = locale(encoding = "latin1"))
-##ADICIONA MAIS PALAVRAS A LISTA DE PALAVRAS
+
+##ADD NEW STOPWORDS
+
 stp_words <- add_row(stp_words, word = "forma")
 stp_words <- add_row(stp_words, word = "dizer")
 stp_words <- add_row(stp_words, word = "pois")
@@ -54,55 +90,100 @@ stp_words <- add_row(stp_words, word = "of")
 stp_words <- add_row(stp_words, word = "and")
 stp_words <- add_row(stp_words, word = "pp")
 stp_words <- add_row(stp_words, word = "press")
-stp_words <- add_row(stp_words, word = "ó")
+stp_words <- add_row(stp_words, word = "?")
 stp_words <- add_row(stp_words, word = "mt")
 stp_words <- add_row(stp_words, word = "tjs")
 stp_words <- add_row(stp_words, word = "gee")
 stp_words <- add_row(stp_words, word = "fez")
 stp_words <- add_row(stp_words, word = "ie")
 stp_words <- add_row(stp_words, word = "diz")
-stp_words <- add_row(stp_words, word = "capítulo")
-stp_words <- add_row(stp_words, word = "porém")
+stp_words <- add_row(stp_words, word = "cap?tulo")
+stp_words <- add_row(stp_words, word = "por?m")
 stp_words <- add_row(stp_words, word = "dc")
 stp_words <- add_row(stp_words, word = "ne")
 stp_words <- add_row(stp_words, word = "nhor")
 stp_words <- add_row(stp_words, word = "se")
 
 
+#---------------------------#
+#  LOADING FOLDER WITH DATA #
+#---------------------------#
 
 
-##CARREGA O PDF DO LIVRO
-text <- paste(pdf_text("C:\\Users\\gusta\\OneDrive\\Documentos\\RStudio\\UP_Pos_RScript\\biblia.pdf"), " ")
-#text <- replace_na(text,"-","")
-text <- unlist(strsplit(text,"[.]")) ##SEPARA O TEXTO POR CADA OCORRENCIA DO PONTO FINAL (SEPARAÇÃO POR FRASE)
-text <- tibble(sentence = text) ##FAZ UMA TABELA COM AS FRASES E ENUMERAÇÃO
+##Set a work directory. It's a folder with data
 
-##REMOVE A PONTUAÇÃO, ESPAÇOS EM BRANCO E NUMEROS
+setwd("C:\\Users\\gusta\\OneDrive\\Documentos\\RStudio\\UP_Pos_RScript\\livros")
+
+
+#Create a function to load files into "PDF" folder.
+
+pdf2txt <- function(files){
+  sapply(paste0('./PDF/', files),
+         function(f){return(paste(pdf_text(f), collapse = " "))},
+         USE.NAMES = FALSE)} 
+
+#Load all file's name inside the folders and subfolders into a table.
+
+alltexts <- tibble(fname = list.files('./PDF',recursive = TRUE)) %>%
+  mutate(category = sub('/[^/]*$', '', fname)) %>%
+  mutate(txt = pdf2txt(fname))
+
+#Load folders names inside the main folder ("PDF")
+
+categories <- unique(alltexts$category)
+
+#Filter a category
+  ## Categories available: "Outros" and "SenhorDosAneis"
+
+viewCategory <- "SenhorDosAneis"
+text <- alltexts %>%
+  filter(str_detect(category, viewCategory))
+
+
+##If you want to load only one text, choice a line below and run.
+
+##text <- paste(pdf_text("C:\\Users\\gusta\\OneDrive\\Documentos\\RStudio\\UP_Pos_RScript\\livros\\PDF\\SenhorDosAneis\\1ASociedadeDoAnel.pdf"), " ")
+##text <- paste(pdf_text("C:\\Users\\gusta\\OneDrive\\Documentos\\RStudio\\UP_Pos_RScript\\livros\\PDF\\SenhorDosAneis\\2AsDuasTorres.pdf"), " ")
+##text <- paste(pdf_text("C:\\Users\\gusta\\OneDrive\\Documentos\\RStudio\\UP_Pos_RScript\\livros\\PDF\\SenhorDosAneis\\3RetornoDoRei.pdf"), " ")
+
+
+#Replace all the "-". Expect join splited words.
+#text <- replace_na(text,"...","")
+
+#Split wich sentence by separator '.'
+text <- unlist(strsplit(text$txt,"[.]"))
+
+#Put wich sentence into a table with a index.
+text <- tibble(sentence = text) 
+
+##Remove punctuation, numbers and blank spaces.
 text$sentence <- text$sentence %>%
   removePunctuation() %>%
   stripWhitespace() %>%
   removeNumbers() 
   
-##TOKENIZAÇÃO DO TEXTO (SEPARAÇÃO POR PALAVRAS)
-tokens <- text %>%
-  mutate(linenumber = row_number()) %>% ##ENUMERA AS PALAVRAS
-  unnest_tokens(word,sentence) %>% ##DESANINHA AS FRASES EM PALAVRAS
-  anti_join(stp_words) ##REMOVE AS PALAVRAS QUE ESTÃO NA LISTA DE STOPWORDS.
-
-##CONTA AS PALAVRAS
+##Split each sentence in words.
+tokens <- text%>%
+  mutate(linenumber = row_number()) %>% #Create a column with sentence number.
+  unnest_tokens(word,sentence) %>%      #Split each word into a column called 'word'.
+  anti_join(stp_words)                  #Remove the stop word.
+  
+  
+##Count the words
 tokens_count <- tokens %>%
-  count(word,sort = TRUE) ##ORDENA PELA CONTAGEM DE PALAVRAS
+  count(word,sort = TRUE) ##Order by count of tokens
 
-##CRIAR UMA LISTA DE CORES PARA OS GRAFICOS COM 15 CORES.
-numRegister <- 15 ## NUMERO DE CORES
-mycolors <- colorRampPalette(brewer.pal(8,"Set2"))(numRegister) ##CRIA UMA NOVA PALETA DE CORES CHAMADA "SET2"
+##Create a palette with 15 colors, called 'Set2'
+numRegister <- 15 ## Number of colors.
+mycolors <- colorRampPalette(brewer.pal(8,"Set2"))(numRegister) 
 
-#wordcloud(tokens_count$word,tokens_count$n, 
-#          max.words = 100, scale = c(2,0.5,5),
-#          colors = brewer.pal(10,"Spectral"))
+#Make a word cloud.
+wordcloud(tokens_count$word,tokens_count$n, 
+          max.words = 50, scale = c(4,0.5,.25),
+          colors = brewer.pal(10,"Spectral"))
+### The result of word cloud is 100 words. The scale put the words the most repeating words bigger than other words.
 
-
-
+#Plot the results in a bar chart with tokens_count
 tokens_count %>%
   mutate(word = reorder(word,n)) %>%
   head(numRegister) %>%
@@ -111,7 +192,10 @@ tokens_count %>%
   geom_col()+
   xlab(NULL)+
   coord_flip()
+### The result put the most frequent word in order descending. Usualy in story books, the most frequent words is the main characters.
 
+
+#Split the sentences in 2 words.
 bigrams <- text %>%
   unnest_tokens(bigram, sentence, token = "ngrams", n = 2) %>%
   separate(bigram,c("word1","word2"),sep = " ") %>%
@@ -120,6 +204,7 @@ bigrams <- text %>%
   unite(bigram,word1,word2,sep = " ") %>%
   count(bigram, sort = TRUE)
 
+#Plot the results in a bar chart.
 bigrams %>%
   mutate(bigram = reorder(bigram,n)) %>%
   head(numRegister) %>%
@@ -128,16 +213,19 @@ bigrams %>%
   geom_col()+
   xlab(NULL)+
   coord_flip()
+### The result usualy is related a quoted text of main character or speaker.
 
+
+#Split the sentences in 3 words.
 trigrams <- text %>%
   unnest_tokens(trigram, sentence, token = "ngrams", n = 3) %>%
-  separate(trigram,c("word1","word2","word3"), sep = " ") %>%
-  filter(!word1 %in% as.vector(t(stp_words$word))) %>%
-  
-  filter(!word3 %in% as.vector(t(stp_words$word))) %>%
+  separate(trigram,c("word1","word2","word3"), sep = " ") %>%   #Important: Only the first and last word were removed the stop words.
+  filter(!word1 %in% as.vector(t(stp_words$word))) %>%          #in case of trigrams, que word 1 and 3.
+  filter(!word3 %in% as.vector(t(stp_words$word))) %>%          #
   unite(trigram,word1,word2,word3, sep = " ") %>%
   count(trigram, sort = TRUE)
 
+#Plot the results in a bar chart.
 trigrams %>%
   mutate(trigram = reorder(trigram,n)) %>%
   head(numRegister) %>%
@@ -147,6 +235,7 @@ trigrams %>%
   xlab(NULL)+
   coord_flip()
 
+#Split the sentences in 4 words.
 quadgrams <- text %>%
   unnest_tokens(quadgram, sentence, token = "ngrams", n = 4) %>%
   separate(quadgram,c("word1","word2","word3","word4"), sep = " ") %>%
@@ -156,6 +245,7 @@ quadgrams <- text %>%
   unite(quadgram,word1,word2,word3,word4, sep = " ") %>%
   count(quadgram, sort = TRUE)
 
+#Plot the results in a bar chart.
 quadgrams %>%
   mutate(quadgram = reorder(quadgram,n)) %>%
   head(numRegister) %>%
@@ -165,34 +255,40 @@ quadgrams %>%
   xlab(NULL)+
   coord_flip()
 
+#Correlate the pairs of words
 word_cords <- tokens %>%
   group_by(word) %>%
   filter(n()>10) %>%
   pairwise_cor(word,linenumber,sort = TRUE)
 
-##ANALISE DE SENTIMENTO
+#-------------------------------#
+#     SENTIMENT ANALISYS        #
+#-------------------------------#
 
-
-##CARREGA LISTA DE PALAVRAS DE SENTIMENTOS
+##Load a sentiment words dictionary (sentiment table)
 affin_pt <- 
   read_delim("C:\\Users\\gusta\\OneDrive\\Documentos\\RStudio\\UP_Pos_RScript\\affin_pt.csv",
              ";",escape_double = FALSE, trim_ws = TRUE, locale = locale(encoding = "latin1"))
 
-
+##Put the sentence words in the sentiment dictionary with inner join, excluding words doesn't countain in sentiment dictionary.
 affin_pt <- tokens %>%
   inner_join(affin_pt) %>%
-  #count(index = sentiment) %>%
-  count(index=linenumber %/% 200, sentiment) %>%
+  count(index=linenumber %/% 1000, sentiment) %>% #The number 1000, represents the number of words 
   spread(sentiment, n, fill = 0) %>%
   mutate(sentiment = positivo - negativo) 
-  #summarise(positivo = sum(positivo), negativo = sum(negativo))
-  
-#barplot(c(affin_pt$positivo,affin_pt$negativo))
+
+#Plot result in a chart, positive values mean positive sentiments.
 ggplot(affin_pt, aes(index, sentiment))+
   geom_col(show.legend = TRUE)
 
-#analise de tópicos  
-#distancia euclidiana (formula da reta) dentro fo grupo esparços
+
+#-------------------------------#
+#       TOPICS ANALISYS         #
+#-------------------------------#
+
+
+#Create an array with results of distance between words.
+#Groups of words create a topic.
 
 dtm <- tokens %>%
   count(linenumber,word, sort = TRUE) %>%
@@ -201,13 +297,14 @@ dtm <- tokens %>%
 corpus_lda <- dtm %>%
   LDA(k = 12, control = list(seed=1234))
 
-get_terms(corpus_lda, 15)
+#Show the terms, splited in 15 topics
+get_terms(corpus_lda, 15) 
 
 
-#calcula a curva de tópicos "joelho". O joelho é a quantidade "ideal" de tópicos.
+#The result of FindTopicsNumber is a calculate of topics. Ploting the results in a line chart, the visual analisys showing a peak, can be a number of topics.
 result <- FindTopicsNumber(
   dtm,
-  topics = seq(from = 2, to = 50, by = 1),
+  topics = seq(from = 2, to = 15, by = 1),
   metrics = c("Arun2010", "Deveaud2014"),
   method = "Gibbs",
   control = list(seed=77),
@@ -215,9 +312,10 @@ result <- FindTopicsNumber(
   verbose = TRUE
   )
 
-#plota os resultados no gráfico
+#Plot the results in a line chart.
 FindTopicsNumber_plot(result)
 
+#Calculate 'beta'. Higher beta is more representative topic. 
 corpus_topics <- tidy(corpus_lda, matrix = "beta")
 corpus_top_terms <- corpus_topics %>%
   group_by(topic) %>%
@@ -228,6 +326,7 @@ corpus_top_terms <- corpus_topics %>%
   mutate(term=reorder(term,beta)) %>%
   mutate(order = row_number())
 
+#Plot the bar charts. Check the 'Beta' in scale charts, the higher value show the most important topic.
 corpus_top_terms %>%
   ggplot(aes(order, beta, fill = factor(topic))) + 
   geom_bar(stat = "identity", show.legend = FALSE) + 
